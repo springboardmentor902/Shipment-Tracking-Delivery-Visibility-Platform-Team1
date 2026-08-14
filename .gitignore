@@ -1,0 +1,30 @@
+# Local secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+**/application-local.properties
+**/application-secrets.properties
+
+# Java / Maven
+**/target/
+*.class
+*.log
+**/data/
+*.mv.db
+*.lock.db
+
+# Node / Next.js
+**/node_modules/
+**/.next/
+**/out/
+*.tsbuildinfo
+npm-debug.log*
+
+# IDE / operating system
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
