@@ -18,18 +18,20 @@ public class AdminSeeder implements CommandLineRunner {
     public void run(String... args) {
         String adminEmail = "admin@shiptrack.com";
  
-        if (userRepository.existsByEmail(adminEmail)) {
-            return; // already seeded — do nothing on subsequent restarts
+        if (userRepository.existsByRole("ADMINISTRATOR")) {
+            return;
         }
- 
-        User admin = User.builder()
-                .fullName("System Administrator")
-                .email(adminEmail)
-                .password(passwordEncoder.encode("Admin@123"))
-                .phone("0000000000")
-                .role("ADMINISTRATOR")
-                .status("ACTIVE")
-                .build();
+
+        User admin = userRepository.findByEmailIgnoreCase(adminEmail)
+                .orElseGet(() -> User.builder()
+                        .fullName("System Administrator")
+                        .email(adminEmail)
+                        .phone("0000000000")
+                        .build());
+
+        admin.setPassword(passwordEncoder.encode("Admin@123"));
+        admin.setRole("ADMINISTRATOR");
+        admin.setStatus("ACTIVE");
  
         userRepository.save(admin);
         System.out.println("Seeded default admin account: " + adminEmail);

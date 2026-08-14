@@ -7,6 +7,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LoginResponse {
+    @ToString.Exclude
     private String token;
     private String tokenType;
     private UserResponse user;

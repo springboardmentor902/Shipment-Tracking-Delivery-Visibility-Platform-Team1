@@ -2,6 +2,7 @@ package com.shiptrack.shiptrack_pro.dto;
  
 import jakarta.validation.constraints.*;
 import lombok.Data;
+import lombok.ToString;
  
 @Data
 public class LoginRequest {
@@ -11,5 +12,6 @@ public class LoginRequest {
     private String email;
  
     @NotBlank(message = "Password is required")
+    @ToString.Exclude
     private String password;
 }

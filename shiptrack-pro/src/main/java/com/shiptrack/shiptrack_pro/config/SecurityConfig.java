@@ -34,10 +34,10 @@ public class SecurityConfig {
             .sessionManagement(session ->
                     session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                    .requestMatchers("/api/auth/**").permitAll()
- 
-                    .requestMatchers(HttpMethod.POST, "/api/shipments")
-                            .hasAnyRole("CUSTOMER", "BUSINESS_CLIENT")
+                    .requestMatchers("/error", "/api/auth/**").permitAll()
+
+                    .requestMatchers("/api/shipments/**")
+                            .hasAnyRole("BUSINESS_CLIENT", "LOGISTICS_OPERATOR")
  
                     .requestMatchers("/api/tracking/**", "/api/routes/**")
                             .hasAnyRole("LOGISTICS_OPERATOR", "ADMINISTRATOR")

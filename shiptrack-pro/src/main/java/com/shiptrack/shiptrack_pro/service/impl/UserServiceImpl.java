@@ -18,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
  
 @Service
 @RequiredArgsConstructor
@@ -29,9 +30,10 @@ public class UserServiceImpl implements UserService {
  
     @Override
     public UserResponse registerUser(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String normalizedEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Email already registered: " + request.getEmail());
+                    "Email already registered: " + normalizedEmail);
         }
  
         Role requestedRole;
@@ -49,10 +51,10 @@ public class UserServiceImpl implements UserService {
         }
  
         User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
+                .fullName(request.getFullName().trim())
+                .email(normalizedEmail)
                 .password(passwordEncoder.encode(request.getPassword()))
-                .phone(request.getPhone())
+                .phone(request.getPhone() == null ? null : request.getPhone().trim())
                 .role(requestedRole.name())
                 .status("ACTIVE")
                 .build();
@@ -63,7 +65,7 @@ public class UserServiceImpl implements UserService {
  
     @Override
     public LoginResponse loginUser(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmailIgnoreCase(request.getEmail().trim())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED, "Invalid email or password"));
  
@@ -104,13 +106,23 @@ public class UserServiceImpl implements UserService {
  
         Role role;
         try {
-            role = Role.valueOf(newRole);
+            role = Role.valueOf(newRole.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Invalid role: " + newRole + ". Must be one of: " +
                             Arrays.toString(Role.values()));
         }
  
+        if (Role.ADMINISTRATOR.name().equals(user.getRole())) {
+            if (role == Role.ADMINISTRATOR) {
+                return mapToResponse(user);
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The seeded administrator role cannot be changed."
+            );
+        }
+
         if (role == Role.ADMINISTRATOR && userRepository.existsByRole("ADMINISTRATOR")) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "An administrator account already exists. Only one administrator is allowed.");
