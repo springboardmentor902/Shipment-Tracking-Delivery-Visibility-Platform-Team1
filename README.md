@@ -177,25 +177,3 @@ npm run build
 ```
 
 Backend tests use an isolated in-memory database. The running application uses PostgreSQL.
-
-## Common problems
-
-### PostgreSQL says no password was provided
-
-Set the password in the same terminal before starting Spring Boot:
-
-```bash
-export SPRING_DATASOURCE_PASSWORD='your-postgresql-password'
-```
-
-### Frontend shows an API error
-
-Confirm that the backend is running on port `8080`, then restart the frontend.
-
-### Port 3000 or 8080 is already in use
-
-Stop the older process with `Ctrl+C`, then start the application again.
-
-## Current scope
-
-Google Maps, live GPS, notifications, proof of delivery and analytics are future integrations. They are not part of the current shipment/authentication milestone and require separate provider credentials.
