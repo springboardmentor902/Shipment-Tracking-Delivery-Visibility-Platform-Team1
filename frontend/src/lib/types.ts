@@ -34,6 +34,18 @@ export const SHIPMENT_STATUSES = [
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 export type ShipmentPriority = "STANDARD" | "EXPRESS";
 
+export interface ShipmentPackage {
+  id: number;
+  description: string;
+  weightKg: number;
+  dimensions: string;
+  quantity: number;
+  declaredValue: number;
+  fragile: boolean;
+}
+
+export type ShipmentPackageRequest = Omit<ShipmentPackage, "id">;
+
 export interface Shipment {
   id: number;
   trackingNumber: string;
@@ -47,12 +59,7 @@ export interface Shipment {
   pickupAddress: string;
   deliveryAddress: string;
   priority: ShipmentPriority;
-  packageDescription: string;
-  weightKg: number;
-  dimensions: string;
-  quantity: number;
-  declaredValue: number;
-  fragile: boolean;
+  packages: ShipmentPackage[];
   status: ShipmentStatus;
   currentLocation: string | null;
   estimatedDeliveryDate: string;
@@ -60,6 +67,8 @@ export interface Shipment {
   cancellationReason: string | null;
   createdById: number;
   createdBy: string;
+  assignedOperatorId: number | null;
+  assignedOperator: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,10 +84,39 @@ export interface ShipmentRequest {
   pickupAddress: string;
   deliveryAddress: string;
   priority: ShipmentPriority;
-  packageDescription: string;
-  weightKg: number;
-  dimensions: string;
-  quantity: number;
-  declaredValue: number;
-  fragile: boolean;
+  packages: ShipmentPackageRequest[];
+}
+
+export interface DeliveryRoute {
+  id: number;
+  shipmentId: number;
+  trackingNumber: string;
+  originAddress: string;
+  destinationAddress: string;
+  originLatitude: number | null;
+  originLongitude: number | null;
+  destinationLatitude: number | null;
+  destinationLongitude: number | null;
+  distanceKm: number | null;
+  estimatedTimeMinutes: number | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  vehicleNumber: string | null;
+  createdById: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RouteRequest {
+  shipmentId: number;
+  driverName: string | null;
+  driverPhone: string | null;
+  vehicleNumber: string | null;
+}
+
+export interface DriverAssignmentRequest {
+  driverName: string;
+  driverPhone: string | null;
+  vehicleNumber: string | null;
 }

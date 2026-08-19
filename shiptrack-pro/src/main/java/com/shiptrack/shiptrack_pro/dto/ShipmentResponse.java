@@ -4,9 +4,9 @@ import com.shiptrack.shiptrack_pro.entity.ShipmentStatus;
 import com.shiptrack.shiptrack_pro.entity.ShipmentPriority;
 import lombok.*;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -25,12 +25,7 @@ public class ShipmentResponse {
     private String pickupAddress;
     private String deliveryAddress;
     private ShipmentPriority priority;
-    private String packageDescription;
-    private BigDecimal weightKg;
-    private String dimensions;
-    private Integer quantity;
-    private BigDecimal declaredValue;
-    private Boolean fragile;
+    private List<PackageResponse> packages;
     private ShipmentStatus status;
     private String currentLocation;
     private LocalDate estimatedDeliveryDate;
@@ -38,6 +33,8 @@ public class ShipmentResponse {
     private String cancellationReason;
     private Long createdById;
     private String createdBy;
+    private Long assignedOperatorId;
+    private String assignedOperator;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

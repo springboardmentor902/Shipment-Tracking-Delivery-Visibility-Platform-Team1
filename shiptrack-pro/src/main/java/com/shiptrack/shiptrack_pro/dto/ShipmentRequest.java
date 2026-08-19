@@ -1,10 +1,11 @@
 package com.shiptrack.shiptrack_pro.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 import com.shiptrack.shiptrack_pro.entity.ShipmentPriority;
 
-import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class ShipmentRequest {
@@ -47,28 +48,7 @@ public class ShipmentRequest {
     @NotNull(message = "Priority is required")
     private ShipmentPriority priority;
 
-    @NotBlank(message = "Package description is required")
-    @Size(max = 500, message = "Package description must not exceed 500 characters")
-    private String packageDescription;
-
-    @NotNull(message = "Weight is required")
-    @DecimalMin(value = "0.01", message = "Weight must be greater than zero")
-    @Digits(integer = 8, fraction = 2, message = "Weight can have at most 8 integer and 2 decimal digits")
-    private BigDecimal weightKg;
-
-    @NotBlank(message = "Package dimensions are required")
-    @Size(max = 100, message = "Package dimensions must not exceed 100 characters")
-    private String dimensions;
-
-    @NotNull(message = "Package quantity is required")
-    @Min(value = 1, message = "Package quantity must be at least one")
-    private Integer quantity;
-
-    @NotNull(message = "Declared value is required")
-    @DecimalMin(value = "0.00", message = "Declared value cannot be negative")
-    @Digits(integer = 12, fraction = 2, message = "Declared value can have at most 12 integer and 2 decimal digits")
-    private BigDecimal declaredValue;
-
-    @NotNull(message = "Fragile flag is required")
-    private Boolean fragile;
+    @NotEmpty(message = "At least one package is required")
+    @Size(max = 50, message = "A shipment cannot contain more than 50 packages")
+    private List<@Valid PackageRequest> packages;
 }

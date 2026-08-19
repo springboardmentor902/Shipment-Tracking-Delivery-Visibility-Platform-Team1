@@ -8,13 +8,16 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(
         name = "shipments",
         indexes = {
                 @Index(name = "idx_shipments_status", columnList = "status"),
-                @Index(name = "idx_shipments_created_by", columnList = "created_by_id")
+                @Index(name = "idx_shipments_created_by", columnList = "created_by_id"),
+                @Index(name = "idx_shipments_assigned_operator", columnList = "assigned_operator_id")
         }
 )
 @Getter
@@ -62,6 +65,11 @@ public class Shipment {
     @Column(nullable = false, length = 20)
     private ShipmentPriority priority;
 
+    /*
+     * These six columns mirror the first package so installations created by the
+     * previous schema continue to work. The packages relation below is the source
+     * of truth and stores every package belonging to the shipment.
+     */
     @Column(name = "package_description", nullable = false, length = 500)
     private String packageDescription;
 
@@ -79,6 +87,11 @@ public class Shipment {
 
     @Column(nullable = false)
     private Boolean fragile;
+
+    @OneToMany(mappedBy = "shipment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    @Builder.Default
+    private List<Package> packages = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -101,6 +114,10 @@ public class Shipment {
     @JoinColumn(name = "created_by_id", nullable = false, updatable = false)
     private User createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_operator_id")
+    private User assignedOperator;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -111,4 +128,9 @@ public class Shipment {
 
     @Version
     private Long version;
+
+    public void addPackage(Package shipmentPackage) {
+        packages.add(shipmentPackage);
+        shipmentPackage.setShipment(this);
+    }
 }

@@ -36,10 +36,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/error", "/api/auth/**").permitAll()
 
-                    .requestMatchers("/api/shipments/**")
-                            .hasAnyRole("BUSINESS_CLIENT", "LOGISTICS_OPERATOR")
+                    .requestMatchers("/api/shipments/**", "/api/routes/**")
+                            .hasAnyRole("CUSTOMER", "BUSINESS_CLIENT", "LOGISTICS_OPERATOR", "ADMINISTRATOR")
  
-                    .requestMatchers("/api/tracking/**", "/api/routes/**")
+                    .requestMatchers("/api/tracking/**")
                             .hasAnyRole("LOGISTICS_OPERATOR", "ADMINISTRATOR")
  
                     .requestMatchers(HttpMethod.POST, "/api/pod/**")

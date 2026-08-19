@@ -3,6 +3,8 @@ package com.shiptrack.shiptrack_pro.service.impl;
 import com.shiptrack.shiptrack_pro.dto.ShipmentRequest;
 import com.shiptrack.shiptrack_pro.dto.ShipmentResponse;
 import com.shiptrack.shiptrack_pro.dto.ShipmentStatusUpdateRequest;
+import com.shiptrack.shiptrack_pro.dto.PackageRequest;
+import com.shiptrack.shiptrack_pro.entity.Package;
 import com.shiptrack.shiptrack_pro.entity.Shipment;
 import com.shiptrack.shiptrack_pro.entity.ShipmentPriority;
 import com.shiptrack.shiptrack_pro.entity.ShipmentStatus;
@@ -21,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -46,15 +49,16 @@ class ShipmentServiceImplTest {
                 .id(7L)
                 .fullName("Business User")
                 .email("business@shiptrack.com")
-                .role("BUSINESS_CLIENT")
+                .role("LOGISTICS_OPERATOR")
                 .status("ACTIVE")
                 .build();
+        lenient().when(userRepository.findByEmailIgnoreCase(creator.getEmail()))
+                .thenReturn(Optional.of(creator));
     }
 
     @Test
     void createShipmentStartsInCreatedStatus() {
         ShipmentRequest request = validRequest();
-        when(userRepository.findByEmailIgnoreCase(creator.getEmail())).thenReturn(Optional.of(creator));
         when(shipmentRepository.save(any(Shipment.class))).thenAnswer(invocation -> {
             Shipment shipment = invocation.getArgument(0);
             shipment.setId(11L);
@@ -71,6 +75,8 @@ class ShipmentServiceImplTest {
         assertThat(response.getCurrentLocation()).isEqualTo(request.getPickupAddress());
         assertThat(response.getEstimatedDeliveryDate()).isEqualTo(LocalDate.now().plusDays(2));
         assertThat(response.getCreatedBy()).isEqualTo(creator.getEmail());
+        assertThat(response.getPackages()).hasSize(2);
+        assertThat(response.getPackages().get(0).getDescription()).isEqualTo("Training material");
         verify(shipmentRepository).save(any(Shipment.class));
     }
 
@@ -80,10 +86,10 @@ class ShipmentServiceImplTest {
         ShipmentStatusUpdateRequest request = new ShipmentStatusUpdateRequest();
         request.setStatus(ShipmentStatus.PICKED_UP);
         request.setCurrentLocation("Pune sorting hub");
-        when(shipmentRepository.findById(11L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findOneById(11L)).thenReturn(Optional.of(shipment));
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
 
-        ShipmentResponse response = shipmentService.updateStatus(11L, request);
+        ShipmentResponse response = shipmentService.updateStatus(11L, request, creator.getEmail());
 
         assertThat(response.getStatus()).isEqualTo(ShipmentStatus.PICKED_UP);
         assertThat(response.getCurrentLocation()).isEqualTo("Pune sorting hub");
@@ -94,9 +100,9 @@ class ShipmentServiceImplTest {
         Shipment shipment = existingShipment(ShipmentStatus.CREATED);
         ShipmentStatusUpdateRequest request = new ShipmentStatusUpdateRequest();
         request.setStatus(ShipmentStatus.DELIVERED);
-        when(shipmentRepository.findById(11L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findOneById(11L)).thenReturn(Optional.of(shipment));
 
-        assertThatThrownBy(() -> shipmentService.updateStatus(11L, request))
+        assertThatThrownBy(() -> shipmentService.updateStatus(11L, request, creator.getEmail()))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
                     assertThat(exception.getStatusCode().value()).isEqualTo(HttpStatus.CONFLICT.value());
                     assertThat(exception.getReason()).contains("CREATED", "DELIVERED");
@@ -107,10 +113,10 @@ class ShipmentServiceImplTest {
     @Test
     void cancelShipmentUsesCancelledStatusInsteadOfDeletingAuditRecord() {
         Shipment shipment = existingShipment(ShipmentStatus.IN_TRANSIT);
-        when(shipmentRepository.findById(11L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findOneById(11L)).thenReturn(Optional.of(shipment));
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
 
-        shipmentService.cancelShipment(11L, "Customer requested cancellation");
+        shipmentService.cancelShipment(11L, "Customer requested cancellation", creator.getEmail());
 
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CANCELLED);
         assertThat(shipment.getCancellationReason()).isEqualTo("Customer requested cancellation");
@@ -121,9 +127,10 @@ class ShipmentServiceImplTest {
     @Test
     void deliveredShipmentCannotBeCancelled() {
         Shipment shipment = existingShipment(ShipmentStatus.DELIVERED);
-        when(shipmentRepository.findById(11L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findOneById(11L)).thenReturn(Optional.of(shipment));
 
-        assertThatThrownBy(() -> shipmentService.cancelShipment(11L, "Customer request"))
+        assertThatThrownBy(() -> shipmentService.cancelShipment(
+                11L, "Customer request", creator.getEmail()))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode().value()).isEqualTo(HttpStatus.CONFLICT.value()));
         verify(shipmentRepository, never()).save(any());
@@ -131,9 +138,9 @@ class ShipmentServiceImplTest {
 
     @Test
     void missingShipmentReturnsNotFound() {
-        when(shipmentRepository.findById(404L)).thenReturn(Optional.empty());
+        when(shipmentRepository.findOneById(404L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> shipmentService.getShipmentById(404L))
+        assertThatThrownBy(() -> shipmentService.getShipmentById(404L, creator.getEmail()))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode().value()).isEqualTo(HttpStatus.NOT_FOUND.value()));
     }
@@ -150,17 +157,25 @@ class ShipmentServiceImplTest {
         request.setPickupAddress("Pune, Maharashtra");
         request.setDeliveryAddress("Bengaluru, Karnataka");
         request.setPriority(ShipmentPriority.EXPRESS);
-        request.setPackageDescription("Training material");
-        request.setWeightKg(new BigDecimal("4.50"));
+        PackageRequest firstPackage = packageRequest("Training material", "4.50", 2, false);
+        PackageRequest secondPackage = packageRequest("Printed documents", "1.25", 1, true);
+        request.setPackages(List.of(firstPackage, secondPackage));
+        return request;
+    }
+
+    private PackageRequest packageRequest(String description, String weight, int quantity, boolean fragile) {
+        PackageRequest request = new PackageRequest();
+        request.setDescription(description);
+        request.setWeightKg(new BigDecimal(weight));
         request.setDimensions("40 x 30 x 20 cm");
-        request.setQuantity(2);
+        request.setQuantity(quantity);
         request.setDeclaredValue(new BigDecimal("2500.00"));
-        request.setFragile(false);
+        request.setFragile(fragile);
         return request;
     }
 
     private Shipment existingShipment(ShipmentStatus status) {
-        return Shipment.builder()
+        Shipment shipment = Shipment.builder()
                 .id(11L)
                 .trackingNumber("SHP-ABCDEF123456")
                 .senderName("Infosys Springboard")
@@ -181,8 +196,19 @@ class ShipmentServiceImplTest {
                 .currentLocation("Pune, Maharashtra")
                 .estimatedDeliveryDate(LocalDate.now().plusDays(2))
                 .createdBy(creator)
+                .assignedOperator(creator)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
+        shipment.addPackage(Package.builder()
+                .id(21L)
+                .description("Training material")
+                .weightKg(new BigDecimal("4.50"))
+                .dimensions("40 x 30 x 20 cm")
+                .quantity(2)
+                .declaredValue(new BigDecimal("2500.00"))
+                .fragile(false)
+                .build());
+        return shipment;
     }
 }
