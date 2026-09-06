@@ -118,6 +118,13 @@ public class Shipment {
     @JoinColumn(name = "assigned_operator_id")
     private User assignedOperator;
 
+    @OneToMany(mappedBy = "shipment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<TrackingEvent> trackingEvents = new ArrayList<>();
+
+    @OneToOne(mappedBy = "shipment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private ETAPrediction etaPrediction;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

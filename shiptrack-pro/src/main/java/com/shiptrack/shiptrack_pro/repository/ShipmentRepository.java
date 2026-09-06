@@ -1,6 +1,7 @@
 package com.shiptrack.shiptrack_pro.repository;
 
 import com.shiptrack.shiptrack_pro.entity.Shipment;
+import com.shiptrack.shiptrack_pro.entity.ShipmentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -18,4 +19,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     @EntityGraph(attributePaths = {"packages", "createdBy", "assignedOperator"})
     java.util.Optional<Shipment> findOneById(Long id);
+
+    @EntityGraph(attributePaths = {"createdBy", "assignedOperator"})
+    List<Shipment> findAllByStatusIn(List<ShipmentStatus> statuses);
 }

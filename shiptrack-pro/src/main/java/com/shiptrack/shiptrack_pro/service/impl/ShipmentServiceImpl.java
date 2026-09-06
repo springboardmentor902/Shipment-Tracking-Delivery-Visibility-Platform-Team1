@@ -6,10 +6,12 @@ import com.shiptrack.shiptrack_pro.entity.Shipment;
 import com.shiptrack.shiptrack_pro.entity.ShipmentPriority;
 import com.shiptrack.shiptrack_pro.entity.ShipmentStatus;
 import com.shiptrack.shiptrack_pro.entity.User;
+import com.shiptrack.shiptrack_pro.entity.TrackingEventType;
 import com.shiptrack.shiptrack_pro.repository.ShipmentRepository;
 import com.shiptrack.shiptrack_pro.repository.UserRepository;
 import com.shiptrack.shiptrack_pro.security.Role;
 import com.shiptrack.shiptrack_pro.service.ShipmentService;
+import com.shiptrack.shiptrack_pro.service.TrackingEventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private final ShipmentRepository shipmentRepository;
     private final UserRepository userRepository;
+    private final TrackingEventService trackingEventService;
 
     @Override
     public ShipmentResponse createShipment(ShipmentRequest request, String creatorEmail) {
@@ -92,7 +95,16 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .map(this::mapPackageRequest)
                 .forEach(shipment::addPackage);
 
-        return mapToResponse(shipmentRepository.save(shipment));
+        Shipment savedShipment = shipmentRepository.save(shipment);
+        trackingEventService.record(
+                savedShipment,
+                TrackingEventType.SHIPMENT_CREATED,
+                savedShipment.getStatus(),
+                savedShipment.getCurrentLocation(),
+                null,
+                null
+        );
+        return mapToResponse(savedShipment);
     }
 
     @Override
@@ -136,6 +148,7 @@ public class ShipmentServiceImpl implements ShipmentService {
         ShipmentStatus requestedStatus = request.getStatus();
 
         if (currentStatus == requestedStatus) {
+            boolean locationChanged = trimToNull(request.getCurrentLocation()) != null;
             if (trimToNull(request.getCurrentLocation()) != null) {
                 shipment.setCurrentLocation(request.getCurrentLocation().trim());
             }
@@ -143,13 +156,31 @@ public class ShipmentServiceImpl implements ShipmentService {
                     && trimToNull(request.getCancellationReason()) != null) {
                 shipment.setCancellationReason(request.getCancellationReason().trim());
             }
-            return mapToResponse(shipmentRepository.save(shipment));
+            Shipment savedShipment = shipmentRepository.save(shipment);
+            if (locationChanged) {
+                trackingEventService.record(
+                        savedShipment,
+                        TrackingEventType.LOCATION_UPDATED,
+                        savedShipment.getStatus(),
+                        savedShipment.getCurrentLocation(),
+                        null,
+                        null
+                );
+            }
+            return mapToResponse(savedShipment);
         }
 
         if (!ALLOWED_TRANSITIONS.get(currentStatus).contains(requestedStatus)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Invalid shipment status transition from " + currentStatus + " to " + requestedStatus
+            );
+        }
+
+        if (requestedStatus == ShipmentStatus.DELIVERED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Submit proof of delivery to complete this shipment"
             );
         }
 
@@ -169,7 +200,16 @@ public class ShipmentServiceImpl implements ShipmentService {
                 shipment.setCurrentLocation(shipment.getDeliveryAddress());
             }
         }
-        return mapToResponse(shipmentRepository.save(shipment));
+        Shipment savedShipment = shipmentRepository.save(shipment);
+        trackingEventService.record(
+                savedShipment,
+                TrackingEventType.STATUS_CHANGED,
+                savedShipment.getStatus(),
+                savedShipment.getCurrentLocation(),
+                null,
+                null
+        );
+        return mapToResponse(savedShipment);
     }
 
     @Override
@@ -214,7 +254,15 @@ public class ShipmentServiceImpl implements ShipmentService {
         String normalizedReason = requireCancellationReason(cancellationReason);
         shipment.setStatus(ShipmentStatus.CANCELLED);
         shipment.setCancellationReason(normalizedReason);
-        shipmentRepository.save(shipment);
+        Shipment savedShipment = shipmentRepository.save(shipment);
+        trackingEventService.record(
+                savedShipment,
+                TrackingEventType.STATUS_CHANGED,
+                ShipmentStatus.CANCELLED,
+                savedShipment.getCurrentLocation(),
+                null,
+                null
+        );
     }
 
     private Shipment findShipment(Long id) {

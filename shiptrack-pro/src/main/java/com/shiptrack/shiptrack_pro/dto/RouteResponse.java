@@ -1,5 +1,6 @@
 package com.shiptrack.shiptrack_pro.dto;
 
+import com.shiptrack.shiptrack_pro.entity.TrafficCondition;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -21,6 +22,10 @@ public class RouteResponse {
     private BigDecimal destinationLongitude;
     private BigDecimal distanceKm;
     private Long estimatedTimeMinutes;
+    private TrafficCondition trafficCondition;
+    private BigDecimal lastKnownLatitude;
+    private BigDecimal lastKnownLongitude;
+    private LocalDateTime lastLocationUpdatedAt;
     private String driverName;
     private String driverPhone;
     private String vehicleNumber;

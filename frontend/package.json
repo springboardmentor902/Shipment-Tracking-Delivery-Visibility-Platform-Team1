@@ -9,13 +9,16 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@stomp/stompjs": "^7.3.0",
     "lucide-react": "^1.31.0",
+    "maplibre-gl": "^6.6.0",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/google.maps": "^3.66.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

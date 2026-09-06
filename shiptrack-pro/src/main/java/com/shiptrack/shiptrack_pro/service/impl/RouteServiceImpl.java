@@ -1,11 +1,16 @@
 package com.shiptrack.shiptrack_pro.service.impl;
 
 import com.shiptrack.shiptrack_pro.dto.DriverAssignmentRequest;
+import com.shiptrack.shiptrack_pro.dto.DriverLocationRequest;
+import com.shiptrack.shiptrack_pro.dto.LocationUpdateResponse;
 import com.shiptrack.shiptrack_pro.dto.RouteRequest;
 import com.shiptrack.shiptrack_pro.dto.RouteResponse;
 import com.shiptrack.shiptrack_pro.entity.Route;
 import com.shiptrack.shiptrack_pro.entity.Shipment;
 import com.shiptrack.shiptrack_pro.entity.User;
+import com.shiptrack.shiptrack_pro.entity.TrackingEventType;
+import com.shiptrack.shiptrack_pro.entity.TrafficCondition;
+import com.shiptrack.shiptrack_pro.event.DriverLocationUpdatedEvent;
 import com.shiptrack.shiptrack_pro.integration.maps.MapsRouteCalculator;
 import com.shiptrack.shiptrack_pro.integration.maps.RouteCalculation;
 import com.shiptrack.shiptrack_pro.repository.RouteRepository;
@@ -13,11 +18,15 @@ import com.shiptrack.shiptrack_pro.repository.ShipmentRepository;
 import com.shiptrack.shiptrack_pro.repository.UserRepository;
 import com.shiptrack.shiptrack_pro.security.Role;
 import com.shiptrack.shiptrack_pro.service.RouteService;
+import com.shiptrack.shiptrack_pro.service.TrackingEventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +37,8 @@ public class RouteServiceImpl implements RouteService {
     private final ShipmentRepository shipmentRepository;
     private final UserRepository userRepository;
     private final MapsRouteCalculator mapsRouteCalculator;
+    private final ApplicationEventPublisher eventPublisher;
+    private final TrackingEventService trackingEventService;
 
     @Override
     public RouteResponse createRoute(RouteRequest request, String requesterEmail) {
@@ -70,13 +81,24 @@ public class RouteServiceImpl implements RouteService {
                 .destinationLongitude(calculation.destination() == null ? null : calculation.destination().longitude())
                 .distanceKm(calculation.distanceKm())
                 .estimatedTimeMinutes(calculation.estimatedTimeMinutes())
+                .trafficCondition(request.getTrafficCondition() == null
+                        ? TrafficCondition.UNKNOWN : request.getTrafficCondition())
                 .driverName(trimToNull(request.getDriverName()))
                 .driverPhone(trimToNull(request.getDriverPhone()))
                 .vehicleNumber(trimToNull(request.getVehicleNumber()))
                 .createdBy(requester)
                 .build();
 
-        return mapToResponse(routeRepository.save(route));
+        Route savedRoute = routeRepository.save(route);
+        trackingEventService.record(
+                shipment,
+                TrackingEventType.ROUTE_CREATED,
+                shipment.getStatus(),
+                shipment.getCurrentLocation(),
+                null,
+                null
+        );
+        return mapToResponse(savedRoute);
     }
 
     @Override
@@ -106,6 +128,45 @@ public class RouteServiceImpl implements RouteService {
         route.setDriverPhone(trimToNull(request.getDriverPhone()));
         route.setVehicleNumber(trimToNull(request.getVehicleNumber()));
         return mapToResponse(routeRepository.save(route));
+    }
+
+    @Override
+    public LocationUpdateResponse updateLocation(
+            Long routeId,
+            DriverLocationRequest request,
+            String requesterEmail
+    ) {
+        User requester = requireUser(requesterEmail);
+        Route route = routeRepository.findOneById(routeId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Route not found with id: " + routeId));
+        requireRouteManagement(route, requester);
+
+        LocalDateTime recordedAt = LocalDateTime.now();
+        route.setLastKnownLatitude(request.getLatitude());
+        route.setLastKnownLongitude(request.getLongitude());
+        route.setLastLocationUpdatedAt(recordedAt);
+        routeRepository.save(route);
+
+        trackingEventService.record(
+                route.getShipment(),
+                TrackingEventType.LOCATION_UPDATED,
+                route.getShipment().getStatus(),
+                route.getShipment().getCurrentLocation(),
+                route.getLastKnownLatitude(),
+                route.getLastKnownLongitude()
+        );
+
+        LocationUpdateResponse response = LocationUpdateResponse.builder()
+                .routeId(route.getId())
+                .shipmentId(route.getShipment().getId())
+                .trackingNumber(route.getShipment().getTrackingNumber())
+                .latitude(route.getLastKnownLatitude())
+                .longitude(route.getLastKnownLongitude())
+                .recordedAt(route.getLastLocationUpdatedAt())
+                .build();
+        eventPublisher.publishEvent(new DriverLocationUpdatedEvent(response));
+        return response;
     }
 
     private Shipment findShipment(Long shipmentId) {
@@ -170,6 +231,10 @@ public class RouteServiceImpl implements RouteService {
                 .destinationLongitude(route.getDestinationLongitude())
                 .distanceKm(route.getDistanceKm())
                 .estimatedTimeMinutes(route.getEstimatedTimeMinutes())
+                .trafficCondition(route.getTrafficCondition())
+                .lastKnownLatitude(route.getLastKnownLatitude())
+                .lastKnownLongitude(route.getLastKnownLongitude())
+                .lastLocationUpdatedAt(route.getLastLocationUpdatedAt())
                 .driverName(route.getDriverName())
                 .driverPhone(route.getDriverPhone())
                 .vehicleNumber(route.getVehicleNumber())

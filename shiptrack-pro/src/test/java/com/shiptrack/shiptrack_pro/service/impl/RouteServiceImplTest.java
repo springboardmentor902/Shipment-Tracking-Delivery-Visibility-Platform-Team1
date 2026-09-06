@@ -1,23 +1,28 @@
 package com.shiptrack.shiptrack_pro.service.impl;
 
 import com.shiptrack.shiptrack_pro.dto.DriverAssignmentRequest;
+import com.shiptrack.shiptrack_pro.dto.DriverLocationRequest;
+import com.shiptrack.shiptrack_pro.dto.LocationUpdateResponse;
 import com.shiptrack.shiptrack_pro.dto.RouteRequest;
 import com.shiptrack.shiptrack_pro.dto.RouteResponse;
 import com.shiptrack.shiptrack_pro.entity.Route;
 import com.shiptrack.shiptrack_pro.entity.Shipment;
 import com.shiptrack.shiptrack_pro.entity.User;
+import com.shiptrack.shiptrack_pro.event.DriverLocationUpdatedEvent;
 import com.shiptrack.shiptrack_pro.integration.maps.Coordinates;
 import com.shiptrack.shiptrack_pro.integration.maps.MapsRouteCalculator;
 import com.shiptrack.shiptrack_pro.integration.maps.RouteCalculation;
 import com.shiptrack.shiptrack_pro.repository.RouteRepository;
 import com.shiptrack.shiptrack_pro.repository.ShipmentRepository;
 import com.shiptrack.shiptrack_pro.repository.UserRepository;
+import com.shiptrack.shiptrack_pro.service.TrackingEventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -26,6 +31,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +49,12 @@ class RouteServiceImplTest {
     @Mock
     private MapsRouteCalculator mapsRouteCalculator;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private TrackingEventService trackingEventService;
+
     private RouteServiceImpl routeService;
     private User operator;
     private Shipment shipment;
@@ -50,7 +62,8 @@ class RouteServiceImplTest {
     @BeforeEach
     void setUp() {
         routeService = new RouteServiceImpl(
-                routeRepository, shipmentRepository, userRepository, mapsRouteCalculator);
+                routeRepository, shipmentRepository, userRepository, mapsRouteCalculator,
+                eventPublisher, trackingEventService);
         operator = User.builder()
                 .id(7L)
                 .fullName("Logistics Operator")
@@ -146,6 +159,34 @@ class RouteServiceImplTest {
         assertThat(response.getDriverName()).isEqualTo("New Driver");
         assertThat(response.getDriverPhone()).isEqualTo("+91 98765 43210");
         assertThat(response.getVehicleNumber()).isEqualTo("MH12AB1234");
+    }
+
+    @Test
+    void assignedOperatorLocationIsSavedAndPublishedAsAnEvent() {
+        Route route = Route.builder()
+                .id(31L)
+                .shipment(shipment)
+                .originAddress(shipment.getPickupAddress())
+                .destinationAddress(shipment.getDeliveryAddress())
+                .createdBy(operator)
+                .build();
+        DriverLocationRequest request = new DriverLocationRequest();
+        request.setLatitude(new BigDecimal("18.5314000"));
+        request.setLongitude(new BigDecimal("73.8446000"));
+
+        when(userRepository.findByEmailIgnoreCase(operator.getEmail())).thenReturn(Optional.of(operator));
+        when(routeRepository.findOneById(route.getId())).thenReturn(Optional.of(route));
+        when(routeRepository.save(route)).thenReturn(route);
+
+        LocationUpdateResponse response = routeService.updateLocation(
+                route.getId(), request, operator.getEmail());
+
+        assertThat(response.getShipmentId()).isEqualTo(shipment.getId());
+        assertThat(response.getLatitude()).isEqualByComparingTo("18.5314000");
+        assertThat(response.getLongitude()).isEqualByComparingTo("73.8446000");
+        assertThat(response.getRecordedAt()).isNotNull();
+        assertThat(route.getLastKnownLatitude()).isEqualByComparingTo("18.5314000");
+        verify(eventPublisher).publishEvent(any(DriverLocationUpdatedEvent.class));
     }
 
     @Test

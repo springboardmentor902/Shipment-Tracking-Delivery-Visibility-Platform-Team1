@@ -14,6 +14,7 @@
 **/data/
 *.mv.db
 *.lock.db
+**/uploads/
 
 # Node / Next.js
 **/node_modules/

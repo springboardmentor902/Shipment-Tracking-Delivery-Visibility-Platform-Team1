@@ -11,7 +11,12 @@
 - Shipment creation with multiple packages, listing, detail, status update and cancellation
 - User-specific shipment lists: customers see their own, operators see assigned and administrators see all
 - Route creation, driver assignment and route lookup by shipment
-- Optional Google Maps geocoding, distance and travel-time calculation
+- Live driver location updates with authenticated STOMP over WebSocket
+- Google Maps with Geoapify fallback for geocoding, distance and travel time
+- Rules-based ETA prediction with delay-risk and confidence scores
+- Automatic ETA recalculation after tracking updates and every 20 minutes
+- In-app and email notifications for shipment updates and delay warnings
+- Proof of Delivery with signature, delivery photo and Support/Admin verification
 - A closed shipment lifecycle with validated status transitions
 - PostgreSQL as the runtime database
 - A separate Next.js frontend with a responsive dark interface
@@ -74,13 +79,17 @@ Use two terminals: one for the backend and one for the frontend.
 
 ```bash
 cd shiptrack-pro
-export SPRING_DATASOURCE_PASSWORD='your-postgresql-password'
-export JWT_SECRET_KEY='replace-this-with-a-random-secret-of-at-least-64-characters'
-export GOOGLE_MAPS_API_KEY='your-restricted-server-side-google-maps-key'
+test -f .env || cp .env.example .env
+# Fill the local .env once, then run:
+set -a
+source .env
+set +a
 DEBUG=false ./mvnw spring-boot:run
 ```
 
-`GOOGLE_MAPS_API_KEY` is optional for local development. Without it, routes are still saved, but their coordinates, distance and estimated travel time remain empty. Enable the Google Geocoding API and Directions API for the key before testing live map calculations. Never commit the real key.
+Google Maps is used first when `GOOGLE_MAPS_API_KEY` is configured. Otherwise Geoapify uses `GEOAPIFY_GEOCODING_API_KEY` and `GEOAPIFY_ROUTING_API_KEY`. If every provider fails, the route is still saved without map metrics. The real `.env` file is ignored by Git.
+
+Email delivery is optional for local development. Add `MAIL_USERNAME`, `MAIL_PASSWORD` and `MAIL_FROM` to `.env`, then set `MAIL_ENABLED=true`. Without SMTP credentials, in-app notifications are still created and visible from the bell icon.
 
 The backend is ready when the terminal shows:
 
@@ -97,12 +106,13 @@ Open another terminal:
 ```bash
 cd frontend
 npm install
+test -f .env.local || cp .env.example .env.local
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in the browser.
 
-The frontend sends `/api/*` requests to the Spring Boot backend. To use another backend URL, copy `frontend/.env.example` to `frontend/.env.local` and change `BACKEND_URL`.
+The frontend sends `/api/*` requests to the Spring Boot backend. Add either a browser-restricted Google key or `NEXT_PUBLIC_GEOAPIFY_API_KEY` to `.env.local`. Geoapify uses a dark MapLibre map with visible provider attribution.
 
 ## How to verify the project
 
@@ -113,8 +123,16 @@ The easiest check is through the web interface:
 3. Sign in using that account.
 4. Create a shipment with one or more packages from the dashboard.
 5. Confirm that it starts in `CREATED` status and receives a tracking number.
-6. Move it through `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY` and `DELIVERED`.
-7. Create another shipment and cancel it with a reason.
+6. Move it through `PICKED_UP`, `IN_TRANSIT` and `OUT_FOR_DELIVERY`.
+7. Sign in as the assigned Logistics Operator and select `Complete delivery`. Add the recipient signature, delivery photo, name and notes.
+8. Confirm that the shipment becomes `DELIVERED`, then open its full detail page as the Customer to view the proof.
+9. Sign in as the administrator, open the proof and verify or reject it.
+10. Create another shipment and cancel it with a reason.
+11. Open `Manage delivery`, create a route, then select `Open live tracking`.
+12. In an Operator/Admin session, broadcast coordinates and confirm that an open Customer tracking page moves immediately.
+13. Open `Full detail` to show the predicted delivery time, delay risk, confidence and calculation factors.
+14. For the Business Client risk demo, use `SEVERE` traffic and move a shipment to `FAILED_DELIVERY`; predictions above 6 appear in `At Risk`.
+15. Open the notification bell after a tracking update, then select the new notification to mark it as read.
 
 Cancellation keeps the database record and changes its status to `CANCELLED`; it does not physically delete the shipment.
 
@@ -151,8 +169,51 @@ The create request contains a `packages` array. Each package is stored in the se
 | `POST` | `/api/routes` | Create a route for a shipment (operator/admin) |
 | `GET` | `/api/routes/{shipmentId}` | Fetch the accessible shipment's route |
 | `PATCH` | `/api/routes/{routeId}/driver` | Assign or change route driver (operator/admin) |
+| `POST` | `/api/route/{routeId}/location` | Save and broadcast the driver's latest coordinates (assigned operator/admin) |
 
-Route origin and destination come from the shipment's pickup and delivery addresses. When `GOOGLE_MAPS_API_KEY` is configured, the backend geocodes both addresses and fills the distance and estimated travel time. A Google Maps error does not stop route creation.
+Route origin and destination come from the shipment's pickup and delivery addresses. Google Maps is the primary provider and Geoapify is the automatic fallback. A provider error does not stop route creation.
+
+`trafficCondition` accepts `UNKNOWN`, `LIGHT`, `MODERATE`, `HEAVY` or `SEVERE`. It is used by ETA prediction.
+
+## ETA API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/eta/{shipmentId}/predict` | Recalculate ETA (assigned operator/admin) |
+| `GET` | `/api/eta/{shipmentId}` | Fetch the current prediction when the shipment is visible |
+
+Each prediction is stored in `eta_predictions` with the predicted delivery time, risk score from 0 to 10, confidence from 0 to 100, readable factors and calculation time. Status and location changes are saved in `tracking_events` and trigger recalculation after the database transaction commits. A scheduled job also refreshes every in-progress shipment every 20 minutes. The at-risk threshold defaults to 6 and can be changed with `ETA_AT_RISK_THRESHOLD`.
+
+## Notification API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/notifications` | Fetch the logged-in user's notifications, newest first |
+| `PATCH` | `/api/notifications/{id}/read` | Mark one owned notification as read |
+| `POST` | `/api/notification` | Create a notification through the service (administrator only) |
+
+A new tracking event creates a `SHIPMENT_UPDATE` notification for the shipment owner. When ETA delay risk crosses the configured threshold, it creates a `DELAY_WARNING`. The owner receives the in-app notification and email; the shipment receiver also receives a separate email. If both addresses match, only one email is sent. The service suppresses the same notification type for the same user and shipment for five minutes by default; this can be changed with `NOTIFICATION_DUPLICATE_WINDOW_MINUTES`.
+
+## Proof of Delivery API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/pod/{shipmentId}` | Assigned Logistics Operator submits recipient name, notes, signature and photo |
+| `GET` | `/api/pod/{shipmentId}` | View proof when the shipment is accessible |
+| `PATCH` | `/api/pod/{shipmentId}/verify` | Support Agent/Admin verifies or rejects the proof |
+
+Submission uses `multipart/form-data` fields named `recipientName`, `deliveryNotes`, `signature` and `photo`. The shipment must be `OUT_FOR_DELIVERY`; a successful submission changes it to `DELIVERED` and records the actual delivery time. PNG, JPEG and WebP images up to 5 MB are stored under the ignored `POD_UPLOAD_DIR`. Stored images are served only after JWT and shipment-access checks.
+
+## Live tracking
+
+- STOMP handshake endpoint: `/api/ws/tracking`
+- Per-shipment destination: `/topic/shipments/{shipmentId}/location`
+- The STOMP `CONNECT` frame must include `Authorization: Bearer <jwt>`.
+- Subscription access follows the same rule as shipment visibility: owner Customer/Business Client, assigned Operator, or Admin.
+- Location is persisted in the route's `last_known_latitude`, `last_known_longitude`, and `last_location_updated_at` columns before it is broadcast.
+- The tracking page unsubscribes and deactivates its STOMP client when the user navigates away.
+
+Backend keys remain server-side. The browser map uses either `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` or `NEXT_PUBLIC_GEOAPIFY_API_KEY` from `frontend/.env.local`.
 
 ### Shipment lifecycle
 
@@ -165,6 +226,7 @@ Non-terminal states can also move to CANCELLED.
 ```
 
 `DELIVERED` and `CANCELLED` are terminal states. Invalid status jumps return `409 Conflict`.
+The `OUT_FOR_DELIVERY → DELIVERED` transition is completed by submitting Proof of Delivery, not by the generic status endpoint.
 
 ## Roles
 
@@ -172,9 +234,9 @@ Non-terminal states can also move to CANCELLED.
 | --- | --- |
 | `CUSTOMER` | Create shipments and view/cancel own shipments and routes |
 | `BUSINESS_CLIENT` | Customer shipment functions for its own records |
-| `LOGISTICS_OPERATOR` | View assigned shipments, manage status/routes and drivers |
-| `SUPPORT_AGENT` | Registration and login |
-| `ADMINISTRATOR` | All shipments/routes plus user, role and operator assignment |
+| `LOGISTICS_OPERATOR` | View assigned shipments, manage status/routes/drivers and submit Proof of Delivery |
+| `SUPPORT_AGENT` | Verify or reject Proof of Delivery records |
+| `ADMINISTRATOR` | All shipments/routes, user/role/operator assignment and Proof of Delivery verification |
 
 Public registration cannot create an administrator. Only the startup seeder creates the single administrator account.
 

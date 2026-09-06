@@ -36,14 +36,24 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/error", "/api/auth/**").permitAll()
 
-                    .requestMatchers("/api/shipments/**", "/api/routes/**")
+                    // The HTTP handshake is public; the STOMP CONNECT frame must carry a valid JWT.
+                    .requestMatchers("/api/ws/tracking", "/api/ws/tracking/**").permitAll()
+
+                    .requestMatchers("/api/shipments/**", "/api/routes/**", "/api/route/**", "/api/eta/**")
                             .hasAnyRole("CUSTOMER", "BUSINESS_CLIENT", "LOGISTICS_OPERATOR", "ADMINISTRATOR")
+
+                    .requestMatchers(HttpMethod.POST, "/api/notification").hasRole("ADMINISTRATOR")
+                    .requestMatchers("/api/notifications/**").authenticated()
+
+                    .requestMatchers(HttpMethod.POST, "/api/pod/**")
+                            .hasRole("LOGISTICS_OPERATOR")
+                    .requestMatchers(HttpMethod.PATCH, "/api/pod/*/verify")
+                            .hasAnyRole("SUPPORT_AGENT", "ADMINISTRATOR")
+                    .requestMatchers(HttpMethod.GET, "/api/pod/**", "/api/files/**")
+                            .hasAnyRole("CUSTOMER", "BUSINESS_CLIENT", "LOGISTICS_OPERATOR", "SUPPORT_AGENT", "ADMINISTRATOR")
  
                     .requestMatchers("/api/tracking/**")
                             .hasAnyRole("LOGISTICS_OPERATOR", "ADMINISTRATOR")
- 
-                    .requestMatchers(HttpMethod.POST, "/api/pod/**")
-                            .hasRole("LOGISTICS_OPERATOR")
  
                     .requestMatchers("/api/analytics/**", "/api/reports/**")
                             .hasAnyRole("BUSINESS_CLIENT", "ADMINISTRATOR")

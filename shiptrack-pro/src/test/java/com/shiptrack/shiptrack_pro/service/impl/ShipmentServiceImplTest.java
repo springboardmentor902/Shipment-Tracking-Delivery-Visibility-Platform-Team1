@@ -11,6 +11,7 @@ import com.shiptrack.shiptrack_pro.entity.ShipmentStatus;
 import com.shiptrack.shiptrack_pro.entity.User;
 import com.shiptrack.shiptrack_pro.repository.ShipmentRepository;
 import com.shiptrack.shiptrack_pro.repository.UserRepository;
+import com.shiptrack.shiptrack_pro.service.TrackingEventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,12 +40,16 @@ class ShipmentServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private TrackingEventService trackingEventService;
+
     private ShipmentServiceImpl shipmentService;
     private User creator;
 
     @BeforeEach
     void setUp() {
-        shipmentService = new ShipmentServiceImpl(shipmentRepository, userRepository);
+        shipmentService = new ShipmentServiceImpl(
+                shipmentRepository, userRepository, trackingEventService);
         creator = User.builder()
                 .id(7L)
                 .fullName("Business User")

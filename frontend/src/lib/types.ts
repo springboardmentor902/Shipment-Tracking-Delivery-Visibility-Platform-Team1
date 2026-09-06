@@ -33,6 +33,7 @@ export const SHIPMENT_STATUSES = [
 
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 export type ShipmentPriority = "STANDARD" | "EXPRESS";
+export type TrafficCondition = "UNKNOWN" | "LIGHT" | "MODERATE" | "HEAVY" | "SEVERE";
 
 export interface ShipmentPackage {
   id: number;
@@ -99,6 +100,10 @@ export interface DeliveryRoute {
   destinationLongitude: number | null;
   distanceKm: number | null;
   estimatedTimeMinutes: number | null;
+  trafficCondition: TrafficCondition;
+  lastKnownLatitude: number | null;
+  lastKnownLongitude: number | null;
+  lastLocationUpdatedAt: string | null;
   driverName: string | null;
   driverPhone: string | null;
   vehicleNumber: string | null;
@@ -110,6 +115,7 @@ export interface DeliveryRoute {
 
 export interface RouteRequest {
   shipmentId: number;
+  trafficCondition: TrafficCondition;
   driverName: string | null;
   driverPhone: string | null;
   vehicleNumber: string | null;
@@ -119,4 +125,63 @@ export interface DriverAssignmentRequest {
   driverName: string;
   driverPhone: string | null;
   vehicleNumber: string | null;
+}
+
+export interface LocationUpdate {
+  routeId: number;
+  shipmentId: number;
+  trackingNumber: string;
+  latitude: number;
+  longitude: number;
+  recordedAt: string;
+}
+
+export interface ETAPrediction {
+  id: number;
+  shipmentId: number;
+  trackingNumber: string;
+  predictedDeliveryTime: string;
+  delayRiskScore: number;
+  confidenceScore: number;
+  factors: string;
+  calculatedAt: string;
+  atRisk: boolean;
+}
+
+export type NotificationType = "SHIPMENT_UPDATE" | "DELAY_WARNING";
+export type NotificationStatus = "PENDING" | "SENT" | "FAILED";
+
+export interface NotificationRecord {
+  id: number;
+  userId: number;
+  shipmentId: number;
+  trackingNumber: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  status: NotificationStatus;
+  sentAt: string | null;
+  readAt: string | null;
+  createdAt: string;
+  unread: boolean;
+}
+
+export type ProofVerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
+
+export interface ProofOfDelivery {
+  id: number;
+  shipmentId: number;
+  trackingNumber: string;
+  recipientName: string;
+  deliveryNotes: string | null;
+  signatureUrl: string;
+  photoUrl: string;
+  submittedById: number;
+  submittedBy: string;
+  submittedAt: string;
+  verificationStatus: ProofVerificationStatus;
+  verifiedById: number | null;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  verificationNotes: string | null;
 }

@@ -1,5 +1,6 @@
 package com.shiptrack.shiptrack_pro.dto;
 
+import com.shiptrack.shiptrack_pro.entity.TrafficCondition;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -9,6 +10,8 @@ public class RouteRequest {
 
     @NotNull(message = "Shipment id is required")
     private Long shipmentId;
+
+    private TrafficCondition trafficCondition = TrafficCondition.UNKNOWN;
 
     @Size(max = 120, message = "Driver name must not exceed 120 characters")
     private String driverName;

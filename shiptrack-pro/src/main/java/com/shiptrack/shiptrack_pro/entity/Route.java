@@ -3,6 +3,7 @@ package com.shiptrack.shiptrack_pro.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
@@ -51,6 +52,21 @@ public class Route {
 
     @Column(name = "estimated_time_minutes")
     private Long estimatedTimeMinutes;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "traffic_condition", nullable = false, length = 20)
+    @ColumnDefault("'UNKNOWN'")
+    @Builder.Default
+    private TrafficCondition trafficCondition = TrafficCondition.UNKNOWN;
+
+    @Column(name = "last_known_latitude", precision = 10, scale = 7)
+    private BigDecimal lastKnownLatitude;
+
+    @Column(name = "last_known_longitude", precision = 10, scale = 7)
+    private BigDecimal lastKnownLongitude;
+
+    @Column(name = "last_location_updated_at")
+    private LocalDateTime lastLocationUpdatedAt;
 
     @Column(name = "driver_name", length = 120)
     private String driverName;

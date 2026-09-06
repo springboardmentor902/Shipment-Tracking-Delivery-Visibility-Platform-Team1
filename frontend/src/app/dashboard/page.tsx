@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  AlertTriangle,
+  ArrowUpRight,
   CheckCircle2,
+  ClipboardCheck,
   ChevronDown,
   LogOut,
   MapPinned,
@@ -17,14 +20,17 @@ import {
   UserRoundCheck,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { Alert } from "@/components/Alert";
 import { Brand } from "@/components/Brand";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ApiError, apiRequest } from "@/lib/api";
 import { clearAuth, getAuth } from "@/lib/auth";
 import type {
   AuthSession,
   DeliveryRoute,
   DriverAssignmentRequest,
+  ETAPrediction,
   RouteRequest,
   Shipment,
   ShipmentRequest,
@@ -36,7 +42,7 @@ const ALLOWED_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   CREATED: ["PICKED_UP", "CANCELLED"],
   PICKED_UP: ["IN_TRANSIT", "CANCELLED"],
   IN_TRANSIT: ["OUT_FOR_DELIVERY", "FAILED_DELIVERY", "CANCELLED"],
-  OUT_FOR_DELIVERY: ["DELIVERED", "FAILED_DELIVERY", "CANCELLED"],
+  OUT_FOR_DELIVERY: ["FAILED_DELIVERY", "CANCELLED"],
   FAILED_DELIVERY: ["OUT_FOR_DELIVERY", "CANCELLED"],
   DELIVERED: [],
   CANCELLED: [],
@@ -85,6 +91,8 @@ export default function DashboardPage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [operators, setOperators] = useState<User[]>([]);
   const [routes, setRoutes] = useState<Record<number, DeliveryRoute | null>>({});
+  const [etaPredictions, setEtaPredictions] = useState<Record<number, ETAPrediction | null>>({});
+  const [etaLoading, setEtaLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -157,6 +165,42 @@ export default function DashboardPage() {
       window.clearTimeout(timer);
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!session || session.user.role !== "BUSINESS_CLIENT" || shipments.length === 0) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setEtaLoading(true);
+      Promise.all(shipments.map(async (shipment) => {
+        try {
+          return await apiRequest<ETAPrediction>(`/eta/${shipment.id}`, {}, session.token);
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        }
+      }))
+        .then((records) => {
+          if (!active) return;
+          setEtaPredictions(Object.fromEntries(shipments.map((shipment, index) => [shipment.id, records[index]])));
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          if (error instanceof ApiError && error.status === 401) {
+            clearAuth();
+            router.replace("/login");
+            return;
+          }
+          setMessage(error instanceof Error ? error.message : "Unable to load business ETA summary.");
+        })
+        .finally(() => {
+          if (active) setEtaLoading(false);
+        });
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [router, session, shipments]);
 
   function handleApiFailure(error: unknown, fallback: string) {
     if (error instanceof ApiError && error.status === 401) {
@@ -343,6 +387,7 @@ export default function DashboardPage() {
     const text = (name: string) => String(form.get(name) ?? "").trim();
     const payload: RouteRequest = {
       shipmentId: shipment.id,
+      trafficCondition: text("trafficCondition") as RouteRequest["trafficCondition"],
       driverName: text("driverName") || null,
       driverPhone: text("driverPhone") || null,
       vehicleNumber: text("vehicleNumber") || null,
@@ -399,6 +444,9 @@ export default function DashboardPage() {
 
   const delivered = shipments.filter((shipment) => shipment.status === "DELIVERED").length;
   const active = shipments.filter((shipment) => !["DELIVERED", "CANCELLED"].includes(shipment.status)).length;
+  const atRiskPredictions = Object.values(etaPredictions)
+    .filter((prediction): prediction is ETAPrediction => Boolean(prediction?.atRisk))
+    .sort((first, second) => Number(second.delayRiskScore) - Number(first.delayRiskScore));
   const initials = session.user.fullName
     .split(" ")
     .slice(0, 2)
@@ -414,6 +462,7 @@ export default function DashboardPage() {
           <span className="workspace-chip">Operations</span>
         </div>
         <div className="topbar-user">
+          <NotificationBell token={session.token} />
           <span className="user-avatar" aria-hidden="true">{initials}</span>
           <div className="user-copy"><strong>{session.user.fullName}</strong><span>{label(session.user.role)}</span></div>
           <button className="secondary-button signout-button" type="button" onClick={logout}><LogOut size={15} /> Sign out</button>
@@ -425,7 +474,7 @@ export default function DashboardPage() {
           <div>
             <span className="eyebrow dark">Operations overview</span>
             <h1>Welcome back, {session.user.fullName.split(" ")[0]}</h1>
-            <p>Monitor delivery progress and keep every hand-off moving.</p>
+            <p>Monitor shipments and update delivery progress.</p>
           </div>
           {canCreateShipments && (
             <button className="primary-button action-button" type="button" onClick={() => setShowCreate((visible) => !visible)}>
@@ -442,6 +491,35 @@ export default function DashboardPage() {
           <article><div className="stat-top"><span>Active delivery</span><Activity size={18} /></div><strong>{active}</strong><small>Currently in progress</small></article>
           <article><div className="stat-top"><span>Delivered</span><CheckCircle2 size={18} /></div><strong>{delivered}</strong><small>Successfully completed</small></article>
         </section>
+
+        {session.user.role === "BUSINESS_CLIENT" && (
+          <section className="at-risk-section">
+            <div className="at-risk-heading">
+              <div><span className="eyebrow dark">Business attention queue</span><h2>At Risk</h2><p>Shipments with a delay-risk score above 6.</p></div>
+              <span className="risk-total"><AlertTriangle size={14} />{atRiskPredictions.length} flagged</span>
+            </div>
+            {etaLoading ? (
+              <div className="at-risk-empty"><span className="spinner dark-spinner" />Checking active forecasts...</div>
+            ) : atRiskPredictions.length === 0 ? (
+              <div className="at-risk-empty"><CheckCircle2 size={17} />No shipments are currently above the risk threshold.</div>
+            ) : (
+              <div className="at-risk-list">
+                {atRiskPredictions.map((prediction) => {
+                  const shipment = shipments.find((record) => record.id === prediction.shipmentId);
+                  if (!shipment) return null;
+                  return (
+                    <button type="button" key={prediction.id} onClick={() => router.push(`/shipments/${shipment.id}`)}>
+                      <span className="risk-indicator"><AlertTriangle size={14} /></span>
+                      <span><strong>{shipment.trackingNumber}</strong><small>{shipment.currentLocation ?? "Location pending"} → {shipment.deliveryAddress}</small></span>
+                      <span className="risk-score"><strong>{Number(prediction.delayRiskScore).toFixed(1)}</strong><small>risk / 10</small></span>
+                      <ArrowUpRight size={15} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
 
         {!canViewShipments && (
           <section className="empty-card">
@@ -464,7 +542,7 @@ export default function DashboardPage() {
                   <div className="field"><label htmlFor="senderName">Sender name</label><input id="senderName" name="senderName" maxLength={120} required /></div>
                   <div className="field"><label htmlFor="senderPhone">Sender phone</label><input id="senderPhone" name="senderPhone" maxLength={25} /></div>
                   <div className="field wide-field"><label htmlFor="senderAddress">Sender address</label><input id="senderAddress" name="senderAddress" maxLength={500} required /></div>
-                  <div className="field wide-field"><label htmlFor="pickupAddress">Pickup address</label><input id="pickupAddress" name="pickupAddress" maxLength={500} required /></div>
+                  <div className="field wide-field"><label htmlFor="pickupAddress">Pickup address</label><input id="pickupAddress" name="pickupAddress" placeholder="Area, city, state" maxLength={500} required /></div>
                 </div>
               </fieldset>
               <fieldset>
@@ -474,7 +552,7 @@ export default function DashboardPage() {
                   <div className="field"><label htmlFor="receiverPhone">Receiver phone</label><input id="receiverPhone" name="receiverPhone" maxLength={25} /></div>
                   <div className="field"><label htmlFor="receiverEmail">Receiver email</label><input id="receiverEmail" name="receiverEmail" type="email" maxLength={254} required /></div>
                   <div className="field wide-field"><label htmlFor="receiverAddress">Receiver address</label><input id="receiverAddress" name="receiverAddress" maxLength={500} required /></div>
-                  <div className="field wide-field"><label htmlFor="deliveryAddress">Delivery address</label><input id="deliveryAddress" name="deliveryAddress" maxLength={500} required /></div>
+                  <div className="field wide-field"><label htmlFor="deliveryAddress">Delivery address</label><input id="deliveryAddress" name="deliveryAddress" placeholder="Area, city, state" maxLength={500} required /></div>
                 </div>
               </fieldset>
               <fieldset>
@@ -535,6 +613,9 @@ export default function DashboardPage() {
                   const routeLoading = busyAction === `route-load-${shipment.id}`;
                   const canCreateThisRoute = session.user.role === "ADMINISTRATOR"
                     || (session.user.role === "LOGISTICS_OPERATOR" && shipment.assignedOperatorId === session.user.id);
+                  const canCompleteDelivery = session.user.role === "LOGISTICS_OPERATOR"
+                    && shipment.assignedOperatorId === session.user.id
+                    && shipment.status === "OUT_FOR_DELIVERY";
                   return (
                     <article className="shipment-card" key={shipment.id}>
                       <div className="shipment-main">
@@ -576,6 +657,11 @@ export default function DashboardPage() {
                         {canCancel && shipment.status !== "CANCELLED" && shipment.status !== "DELIVERED" && (
                           <button className="danger-button" type="button" onClick={() => void cancelShipment(shipment)}>Cancel shipment</button>
                         )}
+                        {canCompleteDelivery && (
+                          <Link className="primary-button pod-complete-link" href={`/shipments/${shipment.id}/complete`}>
+                            <ClipboardCheck size={14} /> Complete delivery
+                          </Link>
+                        )}
                         {transitions.length === 0 && (!canCancel || shipment.status === "CANCELLED" || shipment.status === "DELIVERED") && (
                           <span className="terminal-state">No further status actions</span>
                         )}
@@ -586,7 +672,7 @@ export default function DashboardPage() {
                           onClick={() => void openShipmentDetails(shipment.id)}
                         >
                           {canManageRoutes ? <RouteIcon size={14} /> : <MapPinned size={14} />}
-                          {canManageRoutes ? "Manage delivery" : "View details"}
+                          {canManageRoutes ? "Manage shipment" : "View shipment"}
                           <ChevronDown className="details-chevron" size={14} />
                         </button>
                       </div>
@@ -598,7 +684,10 @@ export default function DashboardPage() {
                               <span className="eyebrow dark">Shipment workspace</span>
                               <h3>Package, assignment and route</h3>
                             </div>
-                            <span className="detail-reference">#{shipment.id}</span>
+                            <div className="detail-heading-actions">
+                              <button className="secondary-button full-detail-link" type="button" onClick={() => router.push(`/shipments/${shipment.id}`)}>Full detail <ArrowUpRight size={13} /></button>
+                              <span className="detail-reference">#{shipment.id}</span>
+                            </div>
                           </div>
 
                           <div className="operations-grid">
@@ -666,8 +755,9 @@ export default function DashboardPage() {
                                   </div>
                                   {canCreateThisRoute ? (
                                     <form className="driver-form" onSubmit={(event) => void createRoute(event, shipment)}>
-                                      <p className="inline-note">Google Maps will calculate coordinates, distance and travel time automatically. The route is still saved if Maps is unavailable.</p>
-                                      <div className="form-grid three-columns">
+                                      <p className="inline-note">The map service calculates coordinates, distance and travel time automatically. The route is still saved if it is unavailable.</p>
+                                      <div className="form-grid four-columns">
+                                        <div className="field"><label htmlFor={`new-traffic-${shipment.id}`}>Traffic condition</label><select id={`new-traffic-${shipment.id}`} name="trafficCondition" defaultValue="UNKNOWN"><option value="UNKNOWN">Unknown</option><option value="LIGHT">Light</option><option value="MODERATE">Moderate</option><option value="HEAVY">Heavy</option><option value="SEVERE">Severe</option></select></div>
                                         <div className="field"><label htmlFor={`new-driver-${shipment.id}`}>Driver name <span className="optional">optional</span></label><input id={`new-driver-${shipment.id}`} name="driverName" maxLength={120} /></div>
                                         <div className="field"><label htmlFor={`new-driver-phone-${shipment.id}`}>Driver phone <span className="optional">optional</span></label><input id={`new-driver-phone-${shipment.id}`} name="driverPhone" maxLength={25} /></div>
                                         <div className="field"><label htmlFor={`new-vehicle-${shipment.id}`}>Vehicle number <span className="optional">optional</span></label><input id={`new-vehicle-${shipment.id}`} name="vehicleNumber" maxLength={40} /></div>
@@ -692,13 +782,21 @@ export default function DashboardPage() {
                                     <div><small>Estimated travel</small><strong>{formatDuration(route.estimatedTimeMinutes)}</strong></div>
                                     <div><small>Vehicle</small><strong>{route.vehicleNumber ?? "Not assigned"}</strong></div>
                                     <div><small>Driver</small><strong>{route.driverName ?? "Not assigned"}</strong></div>
+                                    <div><small>Traffic</small><strong>{label(route.trafficCondition)}</strong></div>
                                   </div>
                                   <div className="coordinate-strip">
                                     <span>Origin {formatCoordinate(route.originLatitude)}, {formatCoordinate(route.originLongitude)}</span>
                                     <span>Destination {formatCoordinate(route.destinationLatitude)}, {formatCoordinate(route.destinationLongitude)}</span>
                                   </div>
+                                  <button
+                                    className="secondary-button live-tracking-link"
+                                    type="button"
+                                    onClick={() => router.push(`/tracking/${shipment.id}`)}
+                                  >
+                                    <MapPinned size={14} /> Open live tracking
+                                  </button>
                                   {route.distanceKm === null && (
-                                    <p className="map-pending-note">Route saved successfully. Distance and travel time will appear after Google Maps responds.</p>
+                                    <p className="map-pending-note">Route saved successfully. Distance and travel time will appear when the map service responds.</p>
                                   )}
                                   {canManageRoutes && (
                                     <form className="driver-form existing-driver-form" onSubmit={(event) => void updateDriver(event, route)}>

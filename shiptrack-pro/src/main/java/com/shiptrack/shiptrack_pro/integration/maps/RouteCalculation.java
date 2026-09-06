@@ -11,4 +11,18 @@ public record RouteCalculation(
     public static RouteCalculation empty() {
         return new RouteCalculation(null, null, null, null);
     }
+
+    public boolean hasCompleteMetrics() {
+        return origin != null && destination != null
+                && distanceKm != null && estimatedTimeMinutes != null;
+    }
+
+    public int dataPointCount() {
+        int count = 0;
+        if (origin != null) count++;
+        if (destination != null) count++;
+        if (distanceKm != null) count++;
+        if (estimatedTimeMinutes != null) count++;
+        return count;
+    }
 }

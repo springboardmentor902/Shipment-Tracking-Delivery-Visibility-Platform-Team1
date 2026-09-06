@@ -85,6 +85,28 @@ class RouteApiIntegrationTest {
 
         Route route = routeRepository.findByShipmentId(shipment.getId()).orElseThrow();
 
+        mockMvc.perform(post("/api/route/{routeId}/location", route.getId())
+                        .with(user(customer.getEmail()).roles("CUSTOMER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"latitude\":18.5314,\"longitude\":73.8446}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/route/{routeId}/location", route.getId())
+                        .with(user(operator.getEmail()).roles("LOGISTICS_OPERATOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"latitude\":18.5314,\"longitude\":73.8446}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.routeId").value(route.getId()))
+                .andExpect(jsonPath("$.shipmentId").value(shipment.getId()))
+                .andExpect(jsonPath("$.latitude").value(18.5314))
+                .andExpect(jsonPath("$.longitude").value(73.8446))
+                .andExpect(jsonPath("$.recordedAt").exists());
+
+        Route locationUpdatedRoute = routeRepository.findOneById(route.getId()).orElseThrow();
+        assertThat(locationUpdatedRoute.getLastKnownLatitude()).isEqualByComparingTo("18.5314000");
+        assertThat(locationUpdatedRoute.getLastKnownLongitude()).isEqualByComparingTo("73.8446000");
+        assertThat(locationUpdatedRoute.getLastLocationUpdatedAt()).isNotNull();
+
         mockMvc.perform(patch("/api/routes/{routeId}/driver", route.getId())
                         .with(user(operator.getEmail()).roles("LOGISTICS_OPERATOR"))
                         .contentType(MediaType.APPLICATION_JSON)
