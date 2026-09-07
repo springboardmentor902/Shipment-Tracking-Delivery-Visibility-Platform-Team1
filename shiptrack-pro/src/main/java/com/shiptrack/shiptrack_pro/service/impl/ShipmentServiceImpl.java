@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -146,18 +145,18 @@ public class ShipmentServiceImpl implements ShipmentService {
         requireShipmentManagement(shipment, requireUser(requesterEmail));
         ShipmentStatus currentStatus = shipment.getStatus();
         ShipmentStatus requestedStatus = request.getStatus();
+        String currentLocation = trimToNull(request.getCurrentLocation());
 
         if (currentStatus == requestedStatus) {
-            boolean locationChanged = trimToNull(request.getCurrentLocation()) != null;
-            if (trimToNull(request.getCurrentLocation()) != null) {
-                shipment.setCurrentLocation(request.getCurrentLocation().trim());
+            if (currentLocation != null) {
+                shipment.setCurrentLocation(currentLocation);
             }
             if (currentStatus == ShipmentStatus.CANCELLED
                     && trimToNull(request.getCancellationReason()) != null) {
                 shipment.setCancellationReason(request.getCancellationReason().trim());
             }
             Shipment savedShipment = shipmentRepository.save(shipment);
-            if (locationChanged) {
+            if (currentLocation != null) {
                 trackingEventService.record(
                         savedShipment,
                         TrackingEventType.LOCATION_UPDATED,
@@ -188,17 +187,11 @@ public class ShipmentServiceImpl implements ShipmentService {
                 ? requireCancellationReason(request.getCancellationReason())
                 : null;
         shipment.setStatus(requestedStatus);
-        if (trimToNull(request.getCurrentLocation()) != null) {
-            shipment.setCurrentLocation(request.getCurrentLocation().trim());
+        if (currentLocation != null) {
+            shipment.setCurrentLocation(currentLocation);
         }
         if (requestedStatus == ShipmentStatus.CANCELLED) {
             shipment.setCancellationReason(cancellationReason);
-        }
-        if (requestedStatus == ShipmentStatus.DELIVERED) {
-            shipment.setActualDeliveryDate(LocalDateTime.now());
-            if (trimToNull(request.getCurrentLocation()) == null) {
-                shipment.setCurrentLocation(shipment.getDeliveryAddress());
-            }
         }
         Shipment savedShipment = shipmentRepository.save(shipment);
         trackingEventService.record(

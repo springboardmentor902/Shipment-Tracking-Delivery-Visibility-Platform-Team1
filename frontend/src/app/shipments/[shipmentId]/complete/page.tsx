@@ -1,13 +1,12 @@
 "use client";
 
-import { ArrowLeft, Camera, CheckCircle2, LogOut, PenLine, Truck } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle2, PenLine, Truck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Alert } from "@/components/Alert";
-import { Brand } from "@/components/Brand";
-import { NotificationBell } from "@/components/NotificationBell";
+import { AppHeader } from "@/components/AppHeader";
 import { SignaturePad, type SignaturePadHandle } from "@/components/SignaturePad";
 import { ApiError, apiRequest } from "@/lib/api";
 import { clearAuth, getAuth } from "@/lib/auth";
@@ -112,22 +111,13 @@ export default function CompleteDeliveryPage() {
     return <main className="loading-screen"><span className="spinner dark-spinner" />Opening delivery form...</main>;
   }
 
-  const initials = session.user.fullName.split(" ").slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase();
   const canSubmit = shipment
     && shipment.status === "OUT_FOR_DELIVERY"
     && shipment.assignedOperatorId === session.user.id;
 
   return (
     <div className="dashboard-body detail-page-body">
-      <header className="topbar">
-        <div className="topbar-brand"><Brand light href="/dashboard" /><span className="workspace-chip">Complete delivery</span></div>
-        <div className="topbar-user">
-          <NotificationBell token={session.token} />
-          <span className="user-avatar" aria-hidden="true">{initials}</span>
-          <div className="user-copy"><strong>{session.user.fullName}</strong><span>Logistics Operator</span></div>
-          <button className="secondary-button signout-button" type="button" onClick={logout}><LogOut size={15} /> Sign out</button>
-        </div>
-      </header>
+      <AppHeader session={session} section="Complete delivery" onSignOut={logout} />
 
       <main className="pod-main">
         <Link className="tracking-back-link" href="/dashboard"><ArrowLeft size={14} /> Back to operations</Link>

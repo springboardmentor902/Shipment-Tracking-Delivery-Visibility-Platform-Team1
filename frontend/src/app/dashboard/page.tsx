@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ChevronDown,
-  LogOut,
   MapPinned,
   Navigation,
   Package,
@@ -22,8 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Alert } from "@/components/Alert";
-import { Brand } from "@/components/Brand";
-import { NotificationBell } from "@/components/NotificationBell";
+import { AppHeader } from "@/components/AppHeader";
 import { ApiError, apiRequest } from "@/lib/api";
 import { clearAuth, getAuth } from "@/lib/auth";
 import type {
@@ -447,32 +445,14 @@ export default function DashboardPage() {
   const atRiskPredictions = Object.values(etaPredictions)
     .filter((prediction): prediction is ETAPrediction => Boolean(prediction?.atRisk))
     .sort((first, second) => Number(second.delayRiskScore) - Number(first.delayRiskScore));
-  const initials = session.user.fullName
-    .split(" ")
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-
   return (
     <div className="dashboard-body">
-      <header className="topbar">
-        <div className="topbar-brand">
-          <Brand light href="/dashboard" />
-          <span className="workspace-chip">Operations</span>
-        </div>
-        <div className="topbar-user">
-          <NotificationBell token={session.token} />
-          <span className="user-avatar" aria-hidden="true">{initials}</span>
-          <div className="user-copy"><strong>{session.user.fullName}</strong><span>{label(session.user.role)}</span></div>
-          <button className="secondary-button signout-button" type="button" onClick={logout}><LogOut size={15} /> Sign out</button>
-        </div>
-      </header>
+      <AppHeader session={session} section="Operations" onSignOut={logout} />
 
       <main className="dashboard-main">
         <section className="dashboard-heading">
           <div>
-            <span className="eyebrow dark">Operations overview</span>
+            <span className="eyebrow dark">Dashboard</span>
             <h1>Welcome back, {session.user.fullName.split(" ")[0]}</h1>
             <p>Monitor shipments and update delivery progress.</p>
           </div>
@@ -495,7 +475,7 @@ export default function DashboardPage() {
         {session.user.role === "BUSINESS_CLIENT" && (
           <section className="at-risk-section">
             <div className="at-risk-heading">
-              <div><span className="eyebrow dark">Business attention queue</span><h2>At Risk</h2><p>Shipments with a delay-risk score above 6.</p></div>
+              <div><span className="eyebrow dark">Needs attention</span><h2>At Risk</h2><p>Shipments with a delay-risk score above 6.</p></div>
               <span className="risk-total"><AlertTriangle size={14} />{atRiskPredictions.length} flagged</span>
             </div>
             {etaLoading ? (
@@ -532,8 +512,8 @@ export default function DashboardPage() {
         {showCreate && canCreateShipments && (
           <section className="create-card">
             <div className="section-heading">
-              <div><span className="eyebrow dark">New order</span><h2>Create a shipment</h2></div>
-              <p>All required information is sent securely to the Spring Boot API.</p>
+              <div><span className="eyebrow dark">New shipment</span><h2>Create a shipment</h2></div>
+              <p>Enter the sender, receiver and package details.</p>
             </div>
             <form onSubmit={createShipment}>
               <fieldset>
@@ -593,7 +573,7 @@ export default function DashboardPage() {
         {canViewShipments && (
           <section className="shipments-section">
             <div className="section-heading compact">
-              <div><span className="eyebrow dark">Live records</span><h2>Shipments</h2></div>
+              <div><span className="eyebrow dark">Recent activity</span><h2>Shipments</h2></div>
               <span className="record-count">{shipments.length} records</span>
             </div>
 
@@ -681,8 +661,8 @@ export default function DashboardPage() {
                         <section className="shipment-detail-panel">
                           <div className="detail-panel-heading">
                             <div>
-                              <span className="eyebrow dark">Shipment workspace</span>
-                              <h3>Package, assignment and route</h3>
+                              <span className="eyebrow dark">Shipment details</span>
+                              <h3>Packages, assignment and route</h3>
                             </div>
                             <div className="detail-heading-actions">
                               <button className="secondary-button full-detail-link" type="button" onClick={() => router.push(`/shipments/${shipment.id}`)}>Full detail <ArrowUpRight size={13} /></button>

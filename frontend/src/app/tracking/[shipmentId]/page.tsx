@@ -4,7 +4,6 @@ import { Client, type StompSubscription } from "@stomp/stompjs";
 import {
   ArrowLeft,
   Clock3,
-  LogOut,
   MapPin,
   Navigation,
   Radio,
@@ -16,10 +15,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Alert } from "@/components/Alert";
-import { Brand } from "@/components/Brand";
+import { AppHeader } from "@/components/AppHeader";
 import { EtaWidget } from "@/components/EtaWidget";
 import { LiveTrackingMap } from "@/components/LiveTrackingMap";
-import { NotificationBell } from "@/components/NotificationBell";
 import { ApiError, apiRequest } from "@/lib/api";
 import { clearAuth, getAuth } from "@/lib/auth";
 import type { AuthSession, DeliveryRoute, LocationUpdate, Shipment } from "@/lib/types";
@@ -236,25 +234,15 @@ export default function TrackingPage() {
   }
 
   const canSendLocation = ["LOGISTICS_OPERATOR", "ADMINISTRATOR"].includes(session.user.role);
-  const initials = session.user.fullName.split(" ").slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase();
-
   return (
     <div className="dashboard-body tracking-page-body">
-      <header className="topbar">
-        <div className="topbar-brand"><Brand light href="/dashboard" /><span className="workspace-chip">Live tracking</span></div>
-        <div className="topbar-user">
-          <NotificationBell token={session.token} />
-          <span className="user-avatar" aria-hidden="true">{initials}</span>
-          <div className="user-copy"><strong>{session.user.fullName}</strong><span>{session.user.role.replaceAll("_", " ")}</span></div>
-          <button className="secondary-button signout-button" type="button" onClick={logout}><LogOut size={15} /> Sign out</button>
-        </div>
-      </header>
+      <AppHeader session={session} section="Live tracking" onSignOut={logout} />
 
       <main className="tracking-main">
         <Link className="tracking-back-link" href="/dashboard"><ArrowLeft size={14} /> Back to operations</Link>
         <section className="tracking-heading">
           <div>
-            <span className="eyebrow dark">Delivery command centre</span>
+            <span className="eyebrow dark">Live tracking</span>
             <h1>{shipment?.trackingNumber ?? "Live shipment tracking"}</h1>
             <p>{shipment ? `${shipment.pickupAddress} to ${shipment.deliveryAddress}` : "The shipment could not be loaded."}</p>
           </div>
@@ -270,8 +258,8 @@ export default function TrackingPage() {
           <div className="tracking-layout">
             <section className="tracking-map-card">
               <div className="tracking-card-heading">
-                <div><span className="eyebrow dark">Real-time position</span><h2>Driver location</h2></div>
-                <span className="map-live-chip"><Radio size={12} /> STOMP live</span>
+                <div><span className="eyebrow dark">Map</span><h2>Driver location</h2></div>
+                <span className="map-live-chip"><Radio size={12} /> Live</span>
               </div>
               <LiveTrackingMap currentLocation={liveCoordinates} origin={origin} destination={destination} />
               <div className="map-status-strip">
@@ -311,11 +299,11 @@ export default function TrackingPage() {
 
               {canSendLocation && (
                 <section className="tracking-info-card driver-location-card">
-                  <div className="operation-title"><span className="operation-icon"><Radio size={16} /></span><div><strong>Driver location update</strong><small>POST and broadcast coordinates</small></div></div>
+                  <div className="operation-title"><span className="operation-icon"><Radio size={16} /></span><div><strong>Update driver location</strong><small>Enter the current coordinates</small></div></div>
                   <form onSubmit={sendLocation}>
                     <div className="field"><label htmlFor="driver-latitude">Latitude</label><input id="driver-latitude" name="latitude" type="number" min="-90" max="90" step="0.0000001" defaultValue={currentLocation?.latitude ?? route.originLatitude ?? ""} required /></div>
                     <div className="field"><label htmlFor="driver-longitude">Longitude</label><input id="driver-longitude" name="longitude" type="number" min="-180" max="180" step="0.0000001" defaultValue={currentLocation?.longitude ?? route.originLongitude ?? ""} required /></div>
-                    <button className="primary-button driver-location-submit" type="submit" disabled={sending}><Send size={14} />{sending ? "Broadcasting..." : "Broadcast location"}</button>
+                    <button className="primary-button driver-location-submit" type="submit" disabled={sending}><Send size={14} />{sending ? "Updating..." : "Update location"}</button>
                   </form>
                 </section>
               )}

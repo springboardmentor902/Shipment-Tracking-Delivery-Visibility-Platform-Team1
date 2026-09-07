@@ -1,13 +1,12 @@
 "use client";
 
-import { ArrowLeft, Box, CalendarClock, Camera, CheckCircle2, FileSignature, LogOut, MapPinned, Package, Route as RouteIcon, ShieldCheck, Truck, UserRound, XCircle } from "lucide-react";
+import { ArrowLeft, Box, CalendarClock, Camera, CheckCircle2, FileSignature, MapPinned, Package, Route as RouteIcon, ShieldCheck, Truck, UserRound, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/Alert";
-import { Brand } from "@/components/Brand";
+import { AppHeader } from "@/components/AppHeader";
 import { EtaWidget } from "@/components/EtaWidget";
-import { NotificationBell } from "@/components/NotificationBell";
 import { ProtectedImage } from "@/components/ProtectedImage";
 import { ApiError, apiRequest } from "@/lib/api";
 import { clearAuth, getAuth } from "@/lib/auth";
@@ -130,19 +129,9 @@ export default function ShipmentDetailPage() {
 
   const canRecalculate = ["LOGISTICS_OPERATOR", "ADMINISTRATOR"].includes(session.user.role);
   const canVerifyProof = ["SUPPORT_AGENT", "ADMINISTRATOR"].includes(session.user.role);
-  const initials = session.user.fullName.split(" ").slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase();
-
   return (
     <div className="dashboard-body detail-page-body">
-      <header className="topbar">
-        <div className="topbar-brand"><Brand light href="/dashboard" /><span className="workspace-chip">Shipment detail</span></div>
-        <div className="topbar-user">
-          <NotificationBell token={session.token} />
-          <span className="user-avatar" aria-hidden="true">{initials}</span>
-          <div className="user-copy"><strong>{session.user.fullName}</strong><span>{label(session.user.role)}</span></div>
-          <button className="secondary-button signout-button" type="button" onClick={logout}><LogOut size={15} /> Sign out</button>
-        </div>
-      </header>
+      <AppHeader session={session} section="Shipment detail" onSignOut={logout} />
 
       <main className="tracking-main detail-main">
         <Link className="tracking-back-link" href="/dashboard"><ArrowLeft size={14} /> Back to operations</Link>

@@ -105,9 +105,9 @@ function GoogleTrackingMap({
           });
           routeLineRef.current = new google.maps.Polyline({
             map: mapRef.current,
-            strokeColor: "#665CFF",
-            strokeOpacity: 0.92,
-            strokeWeight: 5,
+            strokeColor: "#2f6fed",
+            strokeOpacity: 0.85,
+            strokeWeight: 4,
             geodesic: true,
           });
         }
@@ -217,7 +217,7 @@ function updateGeoapifyMap(
         type: "line",
         source: "shipment-route",
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#706cff", "line-opacity": 0.92, "line-width": 5 },
+        paint: { "line-color": "#2f6fed", "line-opacity": 0.85, "line-width": 4 },
       });
     }
     map.fitBounds(new LngLatBounds(geoPoint(routeStart), geoPoint(destination)), {
@@ -275,7 +275,7 @@ function GeoapifyTrackingMap({
           sources: {
             "geoapify-basemap": {
               type: "raster",
-              tiles: [`https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=${encodeURIComponent(apiKey)}`],
+              tiles: [`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${encodeURIComponent(apiKey)}`],
               tileSize: 256,
               attribution: "Powered by Geoapify | © OpenMapTiles © OpenStreetMap contributors",
             },

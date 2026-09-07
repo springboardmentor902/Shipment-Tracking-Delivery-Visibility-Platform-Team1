@@ -50,9 +50,9 @@ export default function RegisterPage() {
   return (
     <AuthShell
       register
-      eyebrow="One shared source of truth"
-      title="Move freight with confidence."
-      description="Create a secure workspace for shipment updates, hand-offs, and end-to-end delivery visibility."
+      eyebrow="New account"
+      title="Create your ShipTrack account."
+      description="Register with the role you use for shipment and delivery work."
     >
       <div className="heading-block">
         <span className="eyebrow dark">Get started</span>

@@ -54,9 +54,9 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      eyebrow="Delivery visibility, simplified"
-      title={<>Every shipment.<br />Clearly in sight.</>}
-      description="Coordinate teams, follow every milestone, and keep deliveries moving from one secure workspace."
+      eyebrow="Shipment operations"
+      title={<>Track and manage deliveries.</>}
+      description="View shipment status, route updates, estimated delivery time and proof of delivery in one place."
     >
       <div className="heading-block">
         <span className="eyebrow dark">Welcome back</span>

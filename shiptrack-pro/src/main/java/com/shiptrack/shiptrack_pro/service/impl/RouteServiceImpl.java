@@ -55,12 +55,9 @@ public class RouteServiceImpl implements RouteService {
                     HttpStatus.CONFLICT, "A route already exists for shipment id: " + shipment.getId());
         }
 
-        if (role == Role.LOGISTICS_OPERATOR) {
-            if (shipment.getAssignedOperator() == null
-                    || !shipment.getAssignedOperator().getId().equals(requester.getId())) {
-                throw new ResponseStatusException(
-                        HttpStatus.FORBIDDEN, "Only the assigned logistics operator can create this route");
-            }
+        if (role == Role.LOGISTICS_OPERATOR && !isAssignedTo(shipment, requester)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "Only the assigned logistics operator can create this route");
         }
 
         RouteCalculation calculation;
@@ -206,12 +203,15 @@ public class RouteServiceImpl implements RouteService {
     private void requireRouteManagement(Route route, User requester) {
         Role role = parseRole(requester);
         boolean allowed = role == Role.ADMINISTRATOR
-                || (role == Role.LOGISTICS_OPERATOR
-                && route.getShipment().getAssignedOperator() != null
-                && route.getShipment().getAssignedOperator().getId().equals(requester.getId()));
+                || (role == Role.LOGISTICS_OPERATOR && isAssignedTo(route.getShipment(), requester));
         if (!allowed) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot manage this route");
         }
+    }
+
+    private boolean isAssignedTo(Shipment shipment, User user) {
+        return shipment.getAssignedOperator() != null
+                && shipment.getAssignedOperator().getId().equals(user.getId());
     }
 
     private String trimToNull(String value) {
