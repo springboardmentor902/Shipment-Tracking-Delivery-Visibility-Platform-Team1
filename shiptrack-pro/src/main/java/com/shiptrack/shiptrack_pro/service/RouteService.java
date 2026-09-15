@@ -167,7 +167,8 @@ public class RouteService {
         String role = user.getRole();
 
         if (!"LOGISTICS_OPERATOR".equals(role)
-                && !"ADMIN".equals(role)) {
+                && !"ADMIN".equals(role)
+                && !"ADMINISTRATOR".equals(role)) {
 
             throw new RuntimeException(
                     "Only Logistics Operator or Admin can manage routes"

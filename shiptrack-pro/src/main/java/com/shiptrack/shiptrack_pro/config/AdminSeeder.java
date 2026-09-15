@@ -27,7 +27,7 @@ public class AdminSeeder implements CommandLineRunner {
                 .email(adminEmail)
                 .password(passwordEncoder.encode("Admin@123"))
                 .phone("0000000000")
-                .role("ADMINISTRATOR")
+                .role("ADMIN")
                 .status("ACTIVE")
                 .build();
  
